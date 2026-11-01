@@ -816,6 +816,21 @@ async function handleAssetFormSubmit(e) {
   }
 
   try {
+    const currentAssets = Storage.getAssets();
+    const existing = editId ? currentAssets.find(a => a.id === editId || a.asset_number === editId) : null;
+    if (editId && (!existing || JSON.stringify(existing) !== editingAssetSnapshot)) {
+      throw new Error('This asset has changed. Close and reopen the form to review it.');
+    }
+    if (currentAssets.some(a => a !== existing && (a.id === assetData.asset_number || a.asset_number === assetData.asset_number))) {
+      throw new Error('This asset number already exists.');
+    }
+    const saveButton = document.getElementById('btnSaveAsset');
+    saveButton.disabled = true;
+    try {
+    if (state.settings.googleAppsScriptUrl) {
+      const response = await GoogleSheets.saveSingleAsset(state.settings.googleAppsScriptUrl, activeCat, { ...existing, ...assetData }, editId);
+      assetData._revision = response.revision;
+    }
     let savedAsset;
     if (editId) {
       savedAsset = Storage.updateAsset(editId, assetData, editingAssetSnapshot);
@@ -832,15 +847,9 @@ async function handleAssetFormSubmit(e) {
     renderAssets();
     closeModal('assetModal');
 
-    // If Google Sheets connected, automatically push to that tab
-    if (state.settings.googleAppsScriptUrl) {
-      try {
-        await GoogleSheets.saveSingleAsset(state.settings.googleAppsScriptUrl, activeCat, savedAsset);
-        showToast(`Synced to Google Sheet tab "${activeCat.name}"`, 'info');
-      } catch (err) {
-        console.warn('Background sync failed:', err);
-        showToast(`Saved locally, but Google Sheets sync failed: ${err.message}`, 'error');
-      }
+    if (state.settings.googleAppsScriptUrl) showToast('Saved to Google Sheets.', 'info');
+    } finally {
+      saveButton.disabled = false;
     }
   } catch (error) {
     showToast(`Error saving asset: ${error.message}`, 'error');
@@ -853,6 +862,14 @@ async function deleteAssetPrompt(assetId) {
   if (!asset) return;
 
   if (confirm(`Are you sure you want to delete "${asset.asset_name || asset.asset_id}"?`)) {
+    if (state.settings.googleAppsScriptUrl) {
+      try {
+        await GoogleSheets.deleteSingleAsset(state.settings.googleAppsScriptUrl, asset.categoryName, asset.asset_number || asset.asset_id || asset.id, asset._revision);
+      } catch (error) {
+        showToast(`Could not delete from Google Sheets: ${error.message}`, 'error');
+        return;
+      }
+    }
     Storage.deleteAsset(assetId);
     state.assets = Storage.getAssets();
     showToast(`Asset deleted.`);
@@ -860,13 +877,6 @@ async function deleteAssetPrompt(assetId) {
     renderCategoryChips();
     renderAssets();
 
-    if (state.settings.googleAppsScriptUrl) {
-      try {
-        await GoogleSheets.deleteSingleAsset(state.settings.googleAppsScriptUrl, asset.categoryName, asset.asset_id || asset.id);
-      } catch (e) {
-        console.warn('Could not delete from sheet:', e);
-      }
-    }
   }
 }
 
@@ -1252,6 +1262,7 @@ async function pullAllDataFromGoogleSheets() {
     if (res.status === 'success' && res.tabs) {
       // Process tabs into categories
       res.tabs.forEach(tab => {
+        if (tab.tabName === 'Asset Upload') return;
         let cat = state.categories.find(c => c.name.toLowerCase() === tab.tabName.toLowerCase());
         const headers = tab.headers || [];
         const fields = headers.map(h => ({
@@ -1271,12 +1282,20 @@ async function pullAllDataFromGoogleSheets() {
       });
 
       // Update assets
-      if (res.assets && res.assets.length > 0) {
+      if (Array.isArray(res.assets)) {
         state.assets = res.assets.map(a => {
           const cat = state.categories.find(c => c.name.toLowerCase() === (a.categoryName || '').toLowerCase());
+          const fields = cat?.fields || STANDARD_TEMPLATE_FIELDS;
+          const normalized = {};
+          fields.forEach(field => { if (a[field.label] !== undefined) normalized[field.id] = a[field.label]; });
+          const number = a['Asset Number'] || a['Asset ID'] || a.asset_id || a.id;
           return {
             ...a,
-            id: a['Asset ID'] || a.asset_id || a.id || `AST-${Math.floor(1000 + Math.random() * 9000)}`,
+            ...normalized,
+            id: number,
+            asset_number: number,
+            asset_id: number,
+            _revision: a.Revision || '',
             categoryId: cat ? cat.id : 'general',
             categoryName: a.categoryName || (cat ? cat.name : 'General')
           };

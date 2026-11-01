@@ -33,6 +33,7 @@ function doGet(e) {
       message: 'Successfully connected to Google Sheet: ' + ss.getName(),
       sheetName: ss.getName(),
       spreadsheetId: ss.getId(),
+      apiVersion: 2,
       tabsCount: ss.getSheets().length
     });
   }
@@ -51,6 +52,7 @@ function doGet(e) {
       if (!data || data.length === 0) return;
 
       var headers = data[0];
+      if (headers.indexOf('Asset Number') < 0) return;
       var tabAssets = [];
 
       for (var r = 1; r < data.length; r++) {
@@ -64,6 +66,15 @@ function doGet(e) {
             assetObj[headerKey] = row[c];
           }
         }
+        assetObj.categoryName = assetObj['Category'] || tabName;
+        assetObj.photos = ['Photo 1', 'Photo 2'].map(function(key) {
+          var id = photoFileId(assetObj[key]);
+          if (!id) return '';
+          try {
+            var blob = DriveApp.getFileById(id).getBlob();
+            return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+          } catch (error) { return ''; }
+        });
         tabAssets.push(assetObj);
         allAssets.push(assetObj);
       }
@@ -98,6 +109,86 @@ function doPost(e) {
     var payload = JSON.parse(contents);
     var action = payload.action;
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // All writes locate the existing record by its original number, across legacy tabs.
+    if (action === 'syncAll') {
+      return createJsonResponse({ status: 'error', message: 'Bulk overwrite is disabled. Save individual assets instead.' });
+    }
+    if (action === 'saveAsset' || action === 'deleteAsset') {
+      var originalId = String(payload.originalId || payload.assetId || (payload.asset && payload.asset['Asset Number']) || '').trim();
+      if (!originalId) throw new Error('Asset Number is required.');
+      var matches = [];
+      ss.getSheets().forEach(function(sheet) {
+        var data = sheet.getDataRange().getValues();
+        var column = data[0].indexOf('Asset Number');
+        if (column < 0) return;
+        for (var r = 1; r < data.length; r++) {
+          if (String(data[r][column]).trim() === originalId) matches.push({ sheet: sheet, row: r + 1 });
+        }
+      });
+      if (matches.length > 1) throw new Error('Duplicate asset numbers found in the spreadsheet. Resolve them before editing or deleting.');
+      if (action === 'deleteAsset') {
+        if (!matches.length) throw new Error('Asset not found in the spreadsheet.');
+        var deleteHeaders = matches[0].sheet.getRange(1, 1, 1, matches[0].sheet.getLastColumn()).getValues()[0];
+        var revisionColumn = deleteHeaders.indexOf('Revision');
+        var currentRevision = revisionColumn < 0 ? '' : matches[0].sheet.getRange(matches[0].row, revisionColumn + 1).getValue();
+        if (String(currentRevision || '') !== String(payload.expectedRevision || '')) throw new Error('This asset was changed by another user. Pull the latest data before deleting.');
+        matches[0].sheet.deleteRow(matches[0].row);
+        return createJsonResponse({ status: 'success', message: 'Asset deleted.' });
+      }
+      if (payload.isEdit && !matches.length) throw new Error('The original asset was not found. Refresh the data before editing.');
+      if (!payload.isEdit && matches.length) throw new Error('An asset with this number already exists.');
+      var newId = String(payload.asset['Asset Number'] || '').trim();
+      if (!newId) throw new Error('Asset Number is required.');
+      if (newId !== originalId) {
+        var collision = false;
+        ss.getSheets().forEach(function(sheet) {
+          var data = sheet.getDataRange().getValues();
+          var column = data[0].indexOf('Asset Number');
+          if (column >= 0 && data.slice(1).some(function(row) { return String(row[column]).trim() === newId; })) collision = true;
+        });
+        if (collision) throw new Error('The new asset number already exists.');
+      }
+      var sheet = matches.length ? matches[0].sheet : ss.getSheetByName('Asset Upload');
+      if (!sheet) sheet = ss.insertSheet('Asset Upload');
+      var headers = sheet.getLastColumn() ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0] : [];
+      (payload.headers || []).concat(['Photo 1', 'Photo 2', 'Revision']).forEach(function(header) {
+        if (header && headers.indexOf(header) < 0) { headers.push(header); sheet.getRange(1, headers.length).setValue(header); }
+      });
+      var values = matches.length ? sheet.getRange(matches[0].row, 1, 1, headers.length).getValues()[0] : headers.map(function() { return ''; });
+      if (matches.length && String(values[headers.indexOf('Revision')] || '') !== String(payload.expectedRevision || '')) {
+        throw new Error('This asset was changed by another user. Pull the latest data before editing.');
+      }
+      Object.keys(payload.asset).forEach(function(key) {
+        var column = headers.indexOf(key);
+        if (column >= 0) values[column] = payload.asset[key];
+      });
+      var photos = payload.photos || ['', ''];
+      for (var p = 0; p < 2; p++) {
+        var photoColumn = headers.indexOf('Photo ' + (p + 1));
+        var photo = photos[p] || '';
+        if (!photo) { values[photoColumn] = ''; continue; }
+        var match = /^data:image\\/(jpeg|png|webp);base64,(.+)$/.exec(photo);
+        if (!match) throw new Error('Invalid photo format.');
+        var bytes = Utilities.base64Decode(match[2]);
+        var existingId = photoFileId(values[photoColumn]);
+        var same = false;
+        if (existingId) {
+          try { same = Utilities.base64Encode(DriveApp.getFileById(existingId).getBlob().getBytes()) === match[2]; } catch (ignored) {}
+        }
+        if (!same) {
+          var folders = DriveApp.getFoldersByName('OREL Asset Photos');
+          var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('OREL Asset Photos');
+          var fileId = folder.createFile(Utilities.newBlob(bytes, 'image/' + match[1], newId + '-photo-' + (p + 1))).getId();
+          values[photoColumn] = 'https://drive.google.com/open?id=' + fileId;
+        }
+      }
+      var target = matches.length ? matches[0].row : Math.max(2, sheet.getLastRow() + 1);
+      var revision = Utilities.getUuid();
+      values[headers.indexOf('Revision')] = revision;
+      sheet.getRange(target, 1, 1, headers.length).setValues([values]);
+      return createJsonResponse({ status: 'success', message: 'Asset saved.', revision: revision });
+    }
 
     // 1. FULL SYNC (Push all categories & assets to their respective tabs)
     if (action === 'syncAll') {
@@ -248,6 +339,12 @@ function doPost(e) {
   }
 }
 
+function photoFileId(value) {
+  var text = String(value || '');
+  var match = /[?&]id=([^&]+)/.exec(text);
+  return match ? match[1] : text;
+}
+
 function createJsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
@@ -306,11 +403,13 @@ export const GoogleSheets = {
     }
 
     const result = await response.json();
+    if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Failed to fetch assets.');
     return result;
   },
 
   // Push all categories and their assets to the Google Sheet (creates 1 tab per category)
   async pushAllToGoogleSheet(scriptUrl, categories, assets) {
+    throw new Error('Bulk overwrite is disabled. Save assets individually instead.');
     const cleanUrl = scriptUrl.trim();
 
     // Group assets by category
@@ -359,8 +458,10 @@ export const GoogleSheets = {
   },
 
   // Save or update an individual asset to its category tab
-  async saveSingleAsset(scriptUrl, category, asset) {
+  async saveSingleAsset(scriptUrl, category, asset, originalId = '') {
     if (!scriptUrl) return null;
+    const connection = await this.testConnection(scriptUrl);
+    if (connection.apiVersion !== 2) throw new Error('Update and redeploy the Apps Script shown in connection settings before saving.');
 
     const tabName = category.name.trim();
     const headers = category.fields.map(f => f.label);
@@ -372,12 +473,17 @@ export const GoogleSheets = {
       if ((val === '' || val === undefined) && f.id === 'purchase_price' && asset.purchase_cost) val = asset.purchase_cost;
       assetRow[f.label] = val;
     });
+    assetRow.Category = category.name;
 
     const payload = {
       action: 'saveAsset',
       tabName: tabName,
       headers: headers,
-      asset: assetRow
+      asset: assetRow,
+      originalId: originalId || asset.asset_number,
+      isEdit: Boolean(originalId),
+      expectedRevision: asset._revision || '',
+      photos: asset.photos || ['', '']
     };
 
     const response = await fetch(scriptUrl.trim(), {
@@ -394,13 +500,16 @@ export const GoogleSheets = {
   },
 
   // Delete an individual asset from its category tab
-  async deleteSingleAsset(scriptUrl, categoryName, assetId) {
+  async deleteSingleAsset(scriptUrl, categoryName, assetId, revision = '') {
     if (!scriptUrl) return null;
+    const connection = await this.testConnection(scriptUrl);
+    if (connection.apiVersion !== 2) throw new Error('Update and redeploy the Apps Script shown in connection settings before deleting.');
 
     const payload = {
       action: 'deleteAsset',
       tabName: categoryName.trim(),
-      assetId: assetId
+      assetId: assetId,
+      expectedRevision: revision
     };
 
     const response = await fetch(scriptUrl.trim(), {

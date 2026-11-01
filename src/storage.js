@@ -496,6 +496,12 @@ export const INITIAL_ASSETS = [
 ];
 
 export const Storage = {
+  clearExistingFrontendAssetsOnce() {
+    const marker = 'orel_frontend_assets_cleared_2026_01';
+    if (localStorage.getItem(marker)) return;
+    this.saveAssets([]);
+    localStorage.setItem(marker, '1');
+  },
   getCategories() {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.CATEGORIES);

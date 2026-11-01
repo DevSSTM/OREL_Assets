@@ -190,6 +190,7 @@ function getActiveCategory() {
 
 // Initialize Application
 function initApp() {
+  Storage.clearExistingFrontendAssetsOnce();
   state.categories = Storage.getCategories();
   state.assets = Storage.getAssets();
   state.settings = Storage.getSettings();

@@ -164,10 +164,11 @@ function showToast(message, type = 'success') {
 // Format Currency
 function formatCurrency(amount) {
   const num = parseFloat(amount) || 0;
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-LK', {
     style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0
+    currency: 'LKR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   }).format(num);
 }
 
@@ -626,7 +627,7 @@ function openAssetModal(assetIdToEdit = null) {
     {
       id: 'Financials',
       title: '4. Procurement & Financials',
-      icon: 'dollar-sign',
+      icon: 'wallet',
       subtitle: 'Pricing, Vendor & Invoicing'
     },
     {

@@ -719,7 +719,7 @@ export const Storage = {
       googleAppsScriptUrl: '',
       autoSync: false,
       lastSyncTimestamp: null,
-      currencySymbol: '$',
+      currencySymbol: 'LKR',
       companyName: 'Orel Corp'
     };
   },

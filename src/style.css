@@ -1355,6 +1355,8 @@ h1, h2, h3, h4, h5, h6 {
 .photo-preview { width: 100%; max-height: 220px; object-fit: contain; border-radius: var(--radius-sm); background: var(--bg-main); }
 .photo-preview[hidden], .photo-remove[hidden] { display: none; }
 .photo-remove { align-self: flex-start; }
+.photo-camera { align-self: flex-start; position: relative; overflow: hidden; cursor: pointer; }
+.photo-camera-input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
 @media (max-width: 600px) { .photo-grid { grid-template-columns: 1fr; } }
 
 /* Category selection cards */

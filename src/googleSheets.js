@@ -87,7 +87,9 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  var lock = LockService.getScriptLock();
   try {
+    lock.waitLock(30000);
     var contents = e.postData ? e.postData.contents : '';
     if (!contents) {
       return createJsonResponse({ status: 'error', message: 'No POST data received' });
@@ -182,12 +184,17 @@ function doPost(e) {
       });
 
       // Search if Asset ID already exists in this tab
-      var assetId = asset['Asset ID'] || asset['asset_id'] || asset['id'];
+      var assetId = asset['Asset Number'] || asset['Asset ID'] || asset['asset_id'] || asset['id'];
       var data = sh.getDataRange().getValues();
       var targetRow = -1;
+      var idColumn = curHeaders.indexOf('Asset Number');
+      if (idColumn < 0) idColumn = curHeaders.indexOf('Asset ID');
+      if (!assetId || idColumn < 0) {
+        return createJsonResponse({ status: 'error', message: 'Asset Number is required.' });
+      }
 
       for (var i = 1; i < data.length; i++) {
-        if (String(data[i][0]).trim() === String(assetId).trim()) {
+        if (String(data[i][idColumn]).trim() === String(assetId).trim()) {
           targetRow = i + 1;
           break;
         }
@@ -220,8 +227,11 @@ function doPost(e) {
       }
 
       var data = sh.getDataRange().getValues();
+      var idColumn = data[0].indexOf('Asset Number');
+      if (idColumn < 0) idColumn = data[0].indexOf('Asset ID');
+      if (idColumn < 0) return createJsonResponse({ status: 'error', message: 'Asset Number column not found.' });
       for (var r = 1; r < data.length; r++) {
-        if (String(data[r][0]).trim() === String(assetId).trim()) {
+        if (String(data[r][idColumn]).trim() === String(assetId).trim()) {
           sh.deleteRow(r + 1);
           return createJsonResponse({ status: 'success', message: 'Deleted asset ' + assetId + ' from ' + tabName });
         }
@@ -233,6 +243,8 @@ function doPost(e) {
     return createJsonResponse({ status: 'error', message: 'Invalid action: ' + action });
   } catch (error) {
     return createJsonResponse({ status: 'error', message: error.toString() });
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
   }
 }
 
@@ -376,7 +388,9 @@ export const GoogleSheets = {
       body: JSON.stringify(payload)
     });
 
-    return await response.json();
+    const result = await response.json();
+    if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Failed to save asset to Google Sheets.');
+    return result;
   },
 
   // Delete an individual asset from its category tab
@@ -397,6 +411,8 @@ export const GoogleSheets = {
       body: JSON.stringify(payload)
     });
 
-    return await response.json();
+    const result = await response.json();
+    if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Failed to delete asset from Google Sheets.');
+    return result;
   }
 };

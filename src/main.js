@@ -27,7 +27,7 @@ function renderPhotoFields(container) {
   const section = document.createElement('section');
   section.className = 'form-section-card';
   section.innerHTML = `<div class="form-section-header"><span class="form-section-title">Asset photos</span></div>
-    <p class="photo-help">Add up to two photos. Images must be 1 MB or smaller.</p><div class="photo-grid"></div>`;
+    <p class="photo-help">Choose or take up to two photos. Photos are resized to save space.</p><div class="photo-grid"></div>`;
   const grid = section.querySelector('.photo-grid');
   assetPhotos.forEach((photo, index) => {
     const slot = document.createElement('div');
@@ -45,6 +45,15 @@ function renderPhotoFields(container) {
     input.accept = 'image/jpeg,image/png,image/webp';
     input.className = 'form-control photo-input';
     label.appendChild(input);
+    const cameraLabel = document.createElement('label');
+    cameraLabel.className = 'btn btn-secondary photo-camera';
+    cameraLabel.textContent = 'Take photo';
+    const camera = document.createElement('input');
+    camera.type = 'file';
+    camera.accept = 'image/*';
+    camera.setAttribute('capture', 'environment');
+    camera.className = 'photo-camera-input';
+    cameraLabel.appendChild(camera);
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'btn btn-secondary photo-remove';
@@ -54,39 +63,58 @@ function renderPhotoFields(container) {
       readVersion++;
       assetPhotos[index] = '';
       input.value = '';
+      camera.value = '';
       input.setCustomValidity('');
+      camera.setCustomValidity('');
       preview.hidden = true;
       remove.hidden = true;
     });
-    input.addEventListener('change', () => {
+    const loadPhoto = (source) => {
       const version = ++readVersion;
       input.setCustomValidity('');
-      const file = input.files[0];
+      camera.setCustomValidity('');
+      const file = source.files[0];
       if (!file) return;
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 1024 * 1024) {
-        input.value = '';
-        showToast('Choose a JPG, PNG or WebP image no larger than 1 MB.', 'error');
+      if (!file.type.startsWith('image/')) {
+        source.value = '';
+        showToast('Please choose an image.', 'error');
         return;
       }
-      const reader = new FileReader();
-      input.setCustomValidity('Please wait for the photo to finish loading.');
-      reader.onload = () => {
-        if (version !== readVersion || !input.isConnected) return;
-        input.setCustomValidity('');
-        assetPhotos[index] = reader.result;
-        preview.src = reader.result;
-        preview.hidden = false;
-        remove.hidden = false;
+      source.setCustomValidity('Please wait for the photo to finish loading.');
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        if (version !== readVersion || !source.isConnected) return;
+        try {
+          const scale = Math.min(1, 1200 / Math.max(image.width, image.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+          const data = canvas.toDataURL('image/jpeg', 0.7);
+          assetPhotos[index] = data;
+          preview.src = data;
+          preview.hidden = false;
+          remove.hidden = false;
+        } catch (error) {
+          showToast('Could not process the photo. Please try another image.', 'error');
+        }
+        source.setCustomValidity('');
+        source.value = '';
       };
-      reader.onerror = () => {
-        if (version !== readVersion || !input.isConnected) return;
-        input.setCustomValidity('');
-        input.value = '';
-        showToast('Could not read the photo. Please try again.', 'error');
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        if (version !== readVersion || !source.isConnected) return;
+        source.setCustomValidity('');
+        source.value = '';
+        showToast('Could not read the photo. Please try another image.', 'error');
       };
-      reader.readAsDataURL(file);
-    });
-    slot.append(label, preview, remove);
+      image.src = url;
+    };
+    input.addEventListener('change', () => loadPhoto(input));
+    camera.addEventListener('change', () => loadPhoto(camera));
+    slot.append(label, cameraLabel, preview, remove);
     grid.appendChild(slot);
   });
   container.appendChild(section);
@@ -655,7 +683,6 @@ function openAssetModal(assetIdToEdit = null) {
 
       let defaultValue = val;
       if (!asset) {
-        if (field.id === 'company') defaultValue = 'Orel Corp';
         if (field.id === 'category') defaultValue = activeCat.name;
         if (field.id === 'status') defaultValue = 'Active / In Use';
         if (field.id === 'depreciation_method') defaultValue = 'Straight Line';
@@ -678,7 +705,7 @@ function openAssetModal(assetIdToEdit = null) {
       labelWrapper.style.justifyContent = 'space-between';
 
       const label = document.createElement('label');
-      label.className = `form-label ${field.required ? 'required' : ''}`;
+      label.className = 'form-label';
       label.textContent = field.label;
       labelWrapper.appendChild(label);
 
@@ -701,11 +728,10 @@ function openAssetModal(assetIdToEdit = null) {
 
       let inputEl;
 
-      if (field.type === 'select') {
+      if (field.type === 'select' && !['asset_type', 'company', 'department'].includes(field.id)) {
         inputEl = document.createElement('select');
         inputEl.className = 'form-control';
         inputEl.name = field.id;
-        if (field.required) inputEl.required = true;
 
         const opts = [...(field.options && field.options.length ? field.options : ['Active / In Use', 'Available / In Stock', 'Under Maintenance', 'In Storage'])];
         if (field.id === 'status') {
@@ -723,14 +749,12 @@ function openAssetModal(assetIdToEdit = null) {
         inputEl.rows = 2;
         inputEl.value = defaultValue || '';
         inputEl.placeholder = field.placeholder || '';
-        if (field.required) inputEl.required = true;
       } else {
         inputEl = document.createElement('input');
         inputEl.className = 'form-control';
         inputEl.name = field.id;
         inputEl.value = defaultValue || '';
         inputEl.placeholder = field.placeholder || '';
-        if (field.required) inputEl.required = true;
 
         if (field.type === 'currency' || field.type === 'number') {
           inputEl.type = 'number';
@@ -814,6 +838,7 @@ async function handleAssetFormSubmit(e) {
         showToast(`Synced to Google Sheet tab "${activeCat.name}"`, 'info');
       } catch (err) {
         console.warn('Background sync failed:', err);
+        showToast(`Saved locally, but Google Sheets sync failed: ${err.message}`, 'error');
       }
     }
   } catch (error) {

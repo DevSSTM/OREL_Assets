@@ -656,18 +656,17 @@ export const Storage = {
       categoryId: category ? category.id : (assetData.categoryId || 'machinery'),
       categoryName: category ? category.name : (assetData.categoryName || assetData.Category || 'Machinery'),
       category: category ? category.name : (assetData.category || assetData.categoryName || 'Machinery'),
-      company: assetData.company || assetData.Company || 'Orel Corp',
+      company: assetData.company || assetData.Company || '',
       createdAt: assetData.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    // Check if asset number exists, if so update it, otherwise prepend
+    // Do not replace an existing asset when adding a new one.
     const existingIdx = assets.findIndex(a => a.id === assetNum || a.asset_number === assetNum);
     if (existingIdx >= 0) {
-      assets[existingIdx] = { ...assets[existingIdx], ...newAsset };
-    } else {
-      assets.unshift(newAsset);
+      throw new Error(`Asset number "${assetNum}" already exists.`);
     }
+    assets.unshift(newAsset);
 
     this.saveAssets(assets);
     return newAsset;
@@ -677,6 +676,9 @@ export const Storage = {
     const assets = this.getAssets();
     const index = assets.findIndex(a => a.id === assetId || a.asset_number === assetId);
     if (index === -1) throw new Error(`Asset not found: ${assetId}`);
+    if (updatedData.asset_number && assets.some((a, i) => i !== index && (a.id === updatedData.asset_number || a.asset_number === updatedData.asset_number))) {
+      throw new Error(`Asset number "${updatedData.asset_number}" already exists.`);
+    }
     if (expectedSnapshot && JSON.stringify(assets[index]) !== expectedSnapshot) {
       throw new Error('This asset has changed since you opened it. Close the form and reopen it to review the latest version.');
     }

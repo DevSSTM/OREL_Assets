@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f7fb" />
+    <meta name="description" content="Mobile-responsive asset management application." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%2310b981%22><path d=%22M3 21h18v-2H3v2zm0-4h18V3H3v14zm2-12h14v10H5V5z%22/></svg>" />
+    <title>OREL Assets | Multi-Tab Asset Management System</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Top Application Header -->
+      <header class="app-header">
+        <div class="brand-wrapper">
+          <div class="brand-logo-icon">
+            <i data-lucide="layers"></i>
+          </div>
+          <div class="brand-text">
+            <h1>OREL Assets</h1>
+            <span>Asset management</span>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <!-- Google Sheets Sync Status Indicator -->
+          <button id="btnOpenSync" class="sync-badge" title="Configure Google Sheets backend">
+            <span id="syncDot" class="sync-dot"></span>
+            <span id="syncStatusText">Sheets: Local</span>
+          </button>
+
+          <!-- Fast Push Sync Button -->
+          <button id="btnQuickSync" class="btn btn-secondary btn-icon-only" title="Quick Sync with Google Sheets">
+            <i data-lucide="refresh-cw"></i>
+          </button>
+
+          <!-- Add Asset Primary Button -->
+          <button id="btnOpenAddAsset" class="btn btn-primary">
+            <i data-lucide="plus"></i>
+            <span>Add Asset</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Application Container -->
+      <main class="main-content">
+        <section class="page-intro">
+          <div>
+            <span class="intro-eyebrow">ASSET MANAGEMENT</span>
+            <h2>Your assets, all in one place.</h2>
+            <p>Choose a category to view, add and manage your assets.</p>
+          </div>
+          <div class="intro-mark" aria-hidden="true"><i data-lucide="boxes"></i></div>
+        </section>
+        <!-- Top Stats Overview -->
+        <section class="stats-banner" id="statsBanner">
+          <div class="stat-card" style="--card-accent: var(--accent-emerald);">
+            <div class="stat-header">
+              <span class="stat-label">Total Assets</span>
+              <div class="stat-icon"><i data-lucide="boxes"></i></div>
+            </div>
+            <div class="stat-value" id="statTotalAssets">0</div>
+            <div class="stat-subtext" id="statCategoryCount">Across 4 Sheet Tabs</div>
+          </div>
+
+          <div class="stat-card" style="--card-accent: var(--accent-blue);">
+            <div class="stat-header">
+              <span class="stat-label">Total Valuation</span>
+              <div class="stat-icon"><i data-lucide="dollar-sign"></i></div>
+            </div>
+            <div class="stat-value" id="statTotalValue">$0</div>
+            <div class="stat-subtext">Portfolio Asset Value</div>
+          </div>
+
+          <div class="stat-card" style="--card-accent: var(--accent-amber);">
+            <div class="stat-header">
+              <span class="stat-label">Active / Operational</span>
+              <div class="stat-icon"><i data-lucide="activity"></i></div>
+            </div>
+            <div class="stat-value" id="statActiveAssets">0</div>
+            <div class="stat-subtext">Assets in production/use</div>
+          </div>
+
+          <div class="stat-card" style="--card-accent: var(--accent-purple);">
+            <div class="stat-header">
+              <span class="stat-label">Backend Tabs</span>
+              <div class="stat-icon"><i data-lucide="sheet"></i></div>
+            </div>
+            <div class="stat-value" id="statTabsCount">4 Tabs</div>
+            <div class="stat-subtext">1 Spreadsheet Database</div>
+          </div>
+        </section>
+
+        <!-- Category Tabs Section (Corresponds to Tabs inside same Google Sheet) -->
+        <section class="category-section">
+          <div class="category-section-header">
+            <div class="category-section-title">
+              <h2>Explore categories</h2>
+              <span class="sheet-tab-indicator">
+                <i data-lucide="database"></i>
+                <span>Select a category to manage assets</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Category Chip Selector -->
+          <div class="category-chips-wrapper">
+            <div class="category-chips-scroll" id="categoryChipsContainer">
+              <!-- Dynamically populated category chips -->
+            </div>
+          </div>
+
+          <!-- Active Category Control Bar -->
+          <div class="active-category-toolbar">
+            <div class="active-cat-info">
+              <div class="active-cat-tab-badge">
+                <i data-lucide="table-2"></i>
+                <span>Selected: <strong id="activeTabNameDisplay">Assets</strong></span>
+              </div>
+              <span id="activeCategoryFieldCount" style="font-size: 0.78rem; color: var(--text-muted);">(11 Fields configured)</span>
+            </div>
+
+            <div class="cat-actions">
+              <!-- Add Custom Field to Category -->
+              <button id="btnAddCustomField" class="btn btn-outline-emerald" style="padding: 0.45rem 0.85rem; font-size: 0.82rem;">
+                <i data-lucide="plus-circle"></i>
+                <span>+ Add Field</span>
+              </button>
+
+              <!-- Manage Category Fields & Settings -->
+              <button id="btnManageCategoryFields" class="btn btn-secondary" style="padding: 0.45rem 0.85rem; font-size: 0.82rem;" title="View & edit fields for this category tab">
+                <i data-lucide="sliders"></i>
+                <span>Tab Fields</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Asset Search, Filters & View Toggle Bar -->
+        <section class="filter-bar">
+          <div class="search-box">
+            <i data-lucide="search" class="search-icon"></i>
+            <input type="text" id="searchInput" class="search-input" placeholder="Search by Asset ID, Name, Location, Serial No..." />
+          </div>
+
+          <div class="filter-actions">
+            <select id="assetTypeFilter" class="select-filter">
+              <option value="ALL">All Asset Types</option>
+              <option value="Laptop">Laptop</option>
+              <option value="Desktop">Desktop</option>
+              <option value="Monitor">Monitor</option>
+              <option value="Printer">Printer</option>
+              <option value="Mobile">Mobile</option>
+              <option value="Vehicle">Vehicle</option>
+              <option value="Furniture">Furniture</option>
+              <option value="Machinery">Machinery</option>
+              <option value="Power Tool">Power Tool</option>
+            </select>
+
+            <select id="statusFilter" class="select-filter">
+              <option value="ALL">All Statuses</option>
+              <option value="Active">Active / In Use</option>
+              <option value="In Stock">In Stock</option>
+              <option value="Not Currently in Use">Not Currently in Use</option>
+              <option value="Maintenance">Under Maintenance</option>
+              <option value="Storage">In Storage</option>
+              <option value="Disposed">Disposed / Written Off</option>
+            </select>
+
+            <select id="sortBySelect" class="select-filter">
+              <option value="newest">Sort: Newest First</option>
+              <option value="cost-desc">Sort: Highest Cost</option>
+              <option value="cost-asc">Sort: Lowest Cost</option>
+              <option value="name">Sort: Name (A-Z)</option>
+            </select>
+
+            <div class="view-toggle-group">
+              <button id="btnViewCards" class="view-toggle-btn active" title="Card View">
+                <i data-lucide="layout-grid"></i>
+              </button>
+              <button id="btnViewTable" class="view-toggle-btn" title="Table View">
+                <i data-lucide="list"></i>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Assets Display Area (Grid View or Table View) -->
+        <section id="assetsContainer">
+          <!-- Dynamically populated with Asset Cards or Asset Table -->
+        </section>
+      </main>
+
+      <!-- Mobile Floating Action Button -->
+      <button id="fabAddAsset" class="mobile-fab" title="Add New Asset">
+        <i data-lucide="plus"></i>
+      </button>
+
+      <!-- Mobile Bottom Navigation Bar -->
+      <nav class="bottom-nav">
+        <button class="nav-item active" data-nav="assets">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Assets</span>
+        </button>
+        <button class="nav-item" data-nav="categories">
+          <i data-lucide="folder-tree"></i>
+          <span>Categories</span>
+        </button>
+        <button class="nav-item" data-nav="sync">
+          <i data-lucide="sheet"></i>
+          <span>Google Sheets</span>
+        </button>
+      </nav>
+
+      <!-- ================================================================= -->
+      <!-- MODAL 1: ADD / EDIT ASSET (23 Template Fields) -->
+      <!-- ================================================================= -->
+      <div id="assetModal" class="modal-backdrop">
+        <div class="modal-container modal-container-lg">
+          <div class="modal-header">
+            <div>
+              <h3 id="assetModalTitle">Add New Asset</h3>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+                Saving to Google Sheet tab: <strong id="modalTabNameIndicator" style="color: var(--accent-emerald-light);">IT Equipment</strong>
+              </p>
+            </div>
+            <button class="modal-close-btn" data-close-modal="assetModal">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+
+          <form id="assetForm" class="modal-body">
+            <input type="hidden" id="assetEditId" />
+            
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label required">Asset Category / Sheet Tab</label>
+              <select id="assetCategorySelect" class="form-control" required>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <!-- Dynamic Form Fields rendered based on selected category & 23 Template Fields -->
+            <div id="dynamicFieldsContainer" class="form-sections-wrapper">
+              <!-- Rendered via JavaScript -->
+            </div>
+          </form>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal="assetModal">Cancel</button>
+            <button type="submit" form="assetForm" class="btn btn-primary" id="btnSaveAsset">
+              <i data-lucide="check"></i>
+              <span>Save Asset</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- MODAL 2: ADD CUSTOM FIELD ("can be able to add-field as i want") -->
+      <!-- ================================================================= -->
+      <div id="fieldModal" class="modal-backdrop">
+        <div class="modal-container" style="max-width: 500px;">
+          <div class="modal-header">
+            <div>
+              <h3>Add Custom Field</h3>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+                Adding column to category tab: <strong id="fieldModalCategoryName" style="color: var(--accent-emerald-light);"></strong>
+              </p>
+            </div>
+            <button class="modal-close-btn" data-close-modal="fieldModal">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+
+          <form id="fieldForm" class="modal-body">
+            <div class="form-group">
+              <label class="form-label required">Field Label / Column Name</label>
+              <input type="text" id="fieldNameInput" class="form-control" placeholder="e.g. Serial Number, Warranty Expiry, Supplier..." required />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label required">Field Data Type</label>
+              <select id="fieldTypeSelect" class="form-control">
+                <option value="text">Single-line Text</option>
+                <option value="number">Numeric (e.g. Quantity, Area, Hours)</option>
+                <option value="currency">Currency / Cost ($)</option>
+                <option value="date">Date (Calendar picker)</option>
+                <option value="select">Dropdown Selection List</option>
+                <option value="textarea">Multi-line Notes / Description</option>
+              </select>
+            </div>
+
+            <div class="form-group" id="fieldOptionsGroup" style="display: none;">
+              <label class="form-label">Dropdown Options (Comma separated)</label>
+              <input type="text" id="fieldOptionsInput" class="form-control" placeholder="Option 1, Option 2, Option 3..." />
+            </div>
+
+            <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.6rem; margin-top: 0.5rem;">
+              <input type="checkbox" id="fieldRequiredCheck" style="width: 18px; height: 18px; accent-color: var(--accent-emerald);" />
+              <label for="fieldRequiredCheck" class="form-label" style="cursor: pointer; margin-bottom: 0;">Make this field required</label>
+            </div>
+          </form>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal="fieldModal">Cancel</button>
+            <button type="submit" form="fieldForm" class="btn btn-primary">
+              <i data-lucide="plus"></i>
+              <span>Add Field Column</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- MODAL 3: ADD CATEGORY (Creates New Tab in Sheet) -->
+      <!-- ================================================================= -->
+      <div id="categoryModal" class="modal-backdrop">
+        <div class="modal-container" style="max-width: 520px;">
+          <div class="modal-header">
+            <div>
+              <h3>Add New Asset Category</h3>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+                Will create a separate tab in your Google Sheet (e.g., AC, Fans, Vehicles)
+              </p>
+            </div>
+            <button class="modal-close-btn" data-close-modal="categoryModal">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+
+          <form id="categoryForm" class="modal-body">
+            <div class="form-group">
+              <label class="form-label required">Category Name (Tab Name)</label>
+              <input type="text" id="categoryNameInput" class="form-control" placeholder="e.g. Air Conditioners, Industrial Fans, Vehicles..." required />
+              <span style="font-size: 0.75rem; color: var(--text-muted);">This name will be the exact tab name inside your Google Sheet.</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Category Description</label>
+              <input type="text" id="categoryDescInput" class="form-control" placeholder="Brief note on assets in this category" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Accent Color</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <input type="color" id="categoryColorInput" value="#06b6d4" style="height: 42px; width: 60px; background: transparent; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); cursor: pointer;" />
+                <input type="text" id="categoryColorText" class="form-control" value="#06b6d4" readonly style="flex: 1;" />
+              </div>
+            </div>
+          </form>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal="categoryModal">Cancel</button>
+            <button type="submit" form="categoryForm" class="btn btn-primary">
+              <i data-lucide="folder-plus"></i>
+              <span>Create Category Tab</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- MODAL 4: CATEGORY FIELDS & TAB SETTINGS -->
+      <!-- ================================================================= -->
+      <div id="categoryFieldsModal" class="modal-backdrop">
+        <div class="modal-container">
+          <div class="modal-header">
+            <div>
+              <h3>Configured Fields for Tab</h3>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+                Tab: <strong id="catFieldsModalName" style="color: var(--accent-emerald-light);"></strong>
+              </p>
+            </div>
+            <button class="modal-close-btn" data-close-modal="categoryFieldsModal">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+
+          <div class="modal-body">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 0.85rem; color: var(--text-secondary);">Columns defined in this sheet tab:</span>
+              <button id="btnOpenAddFieldFromManager" class="btn btn-outline-emerald" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;">
+                <i data-lucide="plus"></i>
+                <span>+ Add Field</span>
+              </button>
+            </div>
+
+            <div class="field-list" id="modalFieldsList">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal="categoryFieldsModal">Done</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- MODAL 5: EXCEL TEMPLATE UPLOAD & EXPORT -->
+      <!-- ================================================================= -->
+      <div id="templateModal" class="modal-backdrop">
+        <div class="modal-container">
+          <div class="modal-header">
+            <div>
+              <h3>Excel Sheet Template Manager</h3>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+                Upload your template with tabs or download the pre-formatted multi-tab workbook
+              </p>
+            </div>
+            <button class="modal-close-btn" data-close-modal="templateModal">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+
+          <div class="modal-body">
+            <!-- Upload Dropzone -->
+            <div id="excelDropzone" class="dropzone">
+              <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" />
+              <div class="dropzone-icon">
+                <i data-lucide="upload-cloud"></i>
+              </div>
+              <div>
+                <h4 style="font-size: 1.05rem; margin-bottom: 0.25rem;">Upload Excel Asset Template</h4>
+                <p style="font-size: 0.82rem; color: var(--text-secondary);">
+                  Drag and drop <strong>Asset_Bulk_Upload_Template.xlsx</strong> or any Excel file here.
+                </p>
+                <p style="font-size: 0.75rem; color: var(--accent-emerald-light); margin-top: 0.5rem;">
+                  ✓ Auto-detects 23 standard template columns & groups rows into respective category tabs!
+                </p>
+              </div>
+            </div>
+
+            <!-- Upload Preview Area -->
+            <div id="excelPreviewArea" style="display: none; background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); margin-top: 1rem;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                <h4 style="font-size: 0.95rem; color: #fff;">Detected Template Structure:</h4>
+                <span id="previewTabsSummary" style="font-size: 0.78rem; color: var(--accent-emerald-light); font-weight: 600;"></span>
+              </div>
+              <div id="previewTabsList" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 200px; overflow-y: auto;">
+                <!-- Detected tabs injected here -->
+              </div>
+              <div style="margin-top: 1rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
+                <button id="btnCancelExcelImport" class="btn btn-secondary" style="font-size: 0.82rem;">Cancel</button>
+                <button id="btnConfirmExcelImport" class="btn btn-primary" style="font-size: 0.82rem;">
+                  <i data-lucide="check"></i>
+                  <span>Import Assets & Categories</span>
+                </button>
+              </div>
+            </div>
+
+            <div style="border-top: 1px solid var(--border-subtle); padding-top: 1rem; margin-top: 1.25rem;">
+              <h4 style="font-size: 0.95rem; margin-bottom: 0.35rem;">Download Formatted Templates</h4>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.85rem;">
+                Download the standardized 23-column OREL Bulk Upload Template (with Lookup Values & Asset Upload sheets) or multi-tab workbooks.
+              </p>
+              <div style="display: flex; flex-wrap: wrap; gap: 0.65rem;">
+                <button id="btnDownloadStandardTemplate" class="btn btn-primary">
+                  <i data-lucide="file-spreadsheet"></i>
+                  <span>Download Bulk Upload Template (.xlsx)</span>
+                </button>
+                <button id="btnDownloadCleanTemplate" class="btn btn-secondary">
+                  <i data-lucide="download"></i>
+                  <span>Download 4-Tab Category Template</span>
+                </button>
+                <button id="btnExportFullAssets" class="btn btn-secondary">
+                  <i data-lucide="database"></i>
+                  <span>Export All Assets to Template</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal="templateModal">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- MODAL 6: GOOGLE SHEETS SETUP & SYNC -->
+      <!-- ================================================================= -->
+      <div id="googleSheetsModal" class="modal-backdrop">
+        <div class="modal-container" style="max-width: 680px;">
+          <div class="modal-header">
+            <div>
+              <h3>Google Sheets Backend Setup</h3>
+              <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">
+                Single spreadsheet with separate tabs for each asset category
+              </p>
+            </div>
+            <button class="modal-close-btn" data-close-modal="googleSheetsModal">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+
+          <div class="modal-body">
+            <!-- Connection Input -->
+            <div class="form-group">
+              <label class="form-label required">Google Apps Script Web App URL</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <input type="url" id="googleScriptUrlInput" class="form-control" placeholder="https://script.google.com/macros/s/.../exec" style="flex: 1;" />
+                <button id="btnTestGoogleConnection" class="btn btn-outline-emerald">
+                  <i data-lucide="plug"></i>
+                  <span>Test</span>
+                </button>
+              </div>
+              <span id="connectionTestFeedback" style="font-size: 0.78rem; margin-top: 0.25rem;"></span>
+            </div>
+
+            <!-- Sync Buttons -->
+            <div style="display: flex; flex-wrap: wrap; gap: 0.65rem; background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+              <div style="flex: 1; min-width: 200px;">
+                <h4 style="font-size: 0.88rem; margin-bottom: 0.2rem;">Push Data to Google Sheet</h4>
+                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                  Creates/updates tabs in your spreadsheet and uploads all assets.
+                </p>
+                <button id="btnPushAllToSheets" class="btn btn-primary" style="width: 100%; font-size: 0.82rem;">
+                  <i data-lucide="upload"></i>
+                  <span>Push All to Google Sheet Tabs</span>
+                </button>
+              </div>
+
+              <div style="flex: 1; min-width: 200px;">
+                <h4 style="font-size: 0.88rem; margin-bottom: 0.2rem;">Pull Data from Google Sheet</h4>
+                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                  Reads all tabs from your spreadsheet into this app.
+                </p>
+                <button id="btnPullAllFromSheets" class="btn btn-secondary" style="width: 100%; font-size: 0.82rem;">
+                  <i data-lucide="download"></i>
+                  <span>Pull from Google Sheet Tabs</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Step by step instructions accordion -->
+            <div>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                <h4 style="font-size: 0.92rem; color: #fff;">1-Minute Setup Instructions:</h4>
+                <button id="btnCopyScriptCode" class="btn btn-secondary" style="font-size: 0.75rem; padding: 0.35rem 0.7rem;">
+                  <i data-lucide="copy"></i>
+                  <span>Copy Apps Script Code</span>
+                </button>
+              </div>
+
+              <ol style="font-size: 0.82rem; color: var(--text-secondary); padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.4rem;">
+                <li>Create or open your Google Spreadsheet (e.g., named <strong>OREL Asset Registry</strong>).</li>
+                <li>In Google Sheets menu, click <strong>Extensions &gt; Apps Script</strong>.</li>
+                <li>Delete any code in the editor, and paste the code below.</li>
+                <li>Click the blue <strong>Deploy</strong> button &gt; <strong>New deployment</strong>.</li>
+                <li>Choose type <strong>Web app</strong>, set <em>Execute as: <strong>Me</strong></em>, and <em>Who has access: <strong>Anyone</strong></em>.</li>
+                <li>Click <strong>Deploy</strong>, authorize access, copy the <strong>Web App URL</strong>, and paste it above!</li>
+              </ol>
+
+              <div style="margin-top: 0.75rem;">
+                <div class="code-preview-box" id="scriptCodePreview"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal="googleSheetsModal">Close</button>
+            <button type="button" class="btn btn-primary" id="btnSaveGoogleSettings">
+              <i data-lucide="check"></i>
+              <span>Save Settings</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- MODAL 7: ASSET DETAILS & BARCODE TAG -->
+      <!-- ================================================================= -->
+      <div id="assetDetailModal" class="modal-backdrop">
+        <div class="modal-container" style="max-width: 580px;">
+          <div class="modal-header">
+            <div>
+              <span id="detailCategoryBadge" class="asset-id-tag"></span>
+              <h3 id="detailAssetTitle" style="margin-top: 0.35rem;">Asset Details</h3>
+            </div>
+            <button class="modal-close-btn" data-close-modal="assetDetailModal">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+
+          <div class="modal-body" id="detailModalBody">
+            <!-- Populated dynamically with full properties and printable asset barcode tag -->
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="btnPrintAssetTag">
+              <i data-lucide="printer"></i>
+              <span>Print Asset Tag</span>
+            </button>
+            <button type="button" class="btn btn-primary" id="btnEditFromDetail">
+              <i data-lucide="edit-3"></i>
+              <span>Edit Asset</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast Container for Notifications -->
+      <div id="toastContainer" class="toast-container"></div>
+    </div>
+
+    <!-- Application Script Entrypoint -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

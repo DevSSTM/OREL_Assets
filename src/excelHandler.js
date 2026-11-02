@@ -53,6 +53,8 @@ export const HEADER_TO_KEY_MAP = {
   'company': 'company',
   'department': 'department',
   'location': 'location',
+  'building': 'building',
+  'floor': 'floor',
   'purchase date': 'purchase_date',
   'purchase price': 'purchase_price',
   'cost': 'purchase_price',

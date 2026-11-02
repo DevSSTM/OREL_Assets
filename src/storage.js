@@ -105,6 +105,28 @@ export const STANDARD_TEMPLATE_FIELDS = [
   { id: 'residual_value', label: 'Residual Value', type: 'currency', required: false, isDefault: true, group: 'Warranty & Depreciation', placeholder: '0.00' }
 ];
 
+const LOCATION_FIELDS = [
+  { id: 'building', label: 'Building', type: 'text', required: false, isDefault: true, group: 'Organization', placeholder: 'e.g. Head Office' },
+  { id: 'floor', label: 'Floor', type: 'text', required: false, isDefault: true, group: 'Organization', placeholder: 'e.g. Ground Floor' }
+];
+
+function addLocationFields(category) {
+  let changed = false;
+  for (const field of LOCATION_FIELDS) {
+    if (category.fields.some(existing => existing.id === field.id || existing.label?.trim().toLowerCase() === field.label.toLowerCase())) continue;
+    const locationIndex = category.fields.findIndex(existing => existing.id === (field.id === 'floor' ? 'building' : 'location'));
+    category.fields.splice(locationIndex < 0 ? category.fields.length : locationIndex + 1, 0, { ...field });
+    changed = true;
+  }
+  return changed;
+}
+
+function createDefaultFields() {
+  const category = { fields: JSON.parse(JSON.stringify(STANDARD_TEMPLATE_FIELDS)) };
+  addLocationFields(category);
+  return category.fields;
+}
+
 export const DEFAULT_CATEGORIES = [
   {
     id: 'machinery',
@@ -113,7 +135,7 @@ export const DEFAULT_CATEGORIES = [
     description: 'Industrial machinery, CNC milling centers, cleanroom lines, generators & commercial fleet',
     icon: 'Cog',
     color: '#3b82f6', // Blue
-    fields: JSON.parse(JSON.stringify(STANDARD_TEMPLATE_FIELDS))
+    fields: createDefaultFields()
   },
   {
     id: 'land-and-building',
@@ -122,7 +144,7 @@ export const DEFAULT_CATEGORIES = [
     description: 'Real estate, land parcels, corporate facilities, warehouses & infrastructure structures',
     icon: 'Building2',
     color: '#10b981', // Emerald
-    fields: JSON.parse(JSON.stringify(STANDARD_TEMPLATE_FIELDS))
+    fields: createDefaultFields()
   },
   {
     id: 'tools-and-equipments',
@@ -131,7 +153,7 @@ export const DEFAULT_CATEGORIES = [
     description: 'IT equipment (laptops, monitors), power tools, testing kits, measurement gauges & workshop equipment',
     icon: 'Wrench',
     color: '#f59e0b', // Amber
-    fields: JSON.parse(JSON.stringify(STANDARD_TEMPLATE_FIELDS))
+    fields: createDefaultFields()
   },
   {
     id: 'furniture-and-fittings',
@@ -140,7 +162,7 @@ export const DEFAULT_CATEGORIES = [
     description: 'Executive workstations, ergonomic task chairs, conference tables, storage units & HVAC fixtures',
     icon: 'Armchair',
     color: '#8b5cf6', // Purple
-    fields: JSON.parse(JSON.stringify(STANDARD_TEMPLATE_FIELDS))
+    fields: createDefaultFields()
   }
 ];
 
@@ -513,6 +535,11 @@ export const Storage = {
             parsed.some(c => c.name.toLowerCase() === mName.toLowerCase())
           );
           if (hasMain4) {
+            let changed = false;
+            parsed.forEach(category => {
+              if (Array.isArray(category.fields) && addLocationFields(category)) changed = true;
+            });
+            if (changed) this.saveCategories(parsed);
             return parsed;
           }
         }
@@ -556,8 +583,10 @@ export const Storage = {
       color: category.color || '#06b6d4',
       fields: category.fields && category.fields.length > 0 
         ? category.fields 
-        : JSON.parse(JSON.stringify(STANDARD_TEMPLATE_FIELDS))
+        : createDefaultFields()
     };
+
+    addLocationFields(newCategory);
 
     categories.push(newCategory);
     this.saveCategories(categories);

@@ -458,6 +458,9 @@ function renderAssets() {
               <button class="btn-card-action btn-edit-asset" data-id="${assetNum}" title="Edit Asset">
                 <i data-lucide="edit" style="width: 16px; height: 16px;"></i>
               </button>
+              <button class="btn-card-action btn-duplicate-asset" data-id="${assetNum}" title="Duplicate Asset" aria-label="Duplicate Asset">
+                <i data-lucide="copy" style="width: 16px; height: 16px;"></i>
+              </button>
               <button class="btn-card-action delete btn-delete-asset" data-id="${assetNum}" title="Delete Asset">
                 <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
               </button>
@@ -516,6 +519,9 @@ function renderAssets() {
               <button class="btn-card-action btn-edit-asset" data-id="${assetNum}" title="Edit">
                 <i data-lucide="edit" style="width: 15px; height: 15px;"></i>
               </button>
+              <button class="btn-card-action btn-duplicate-asset" data-id="${assetNum}" title="Duplicate Asset" aria-label="Duplicate Asset">
+                <i data-lucide="copy" style="width: 15px; height: 15px;"></i>
+              </button>
               <button class="btn-card-action delete btn-delete-asset" data-id="${assetNum}" title="Delete">
                 <i data-lucide="trash-2" style="width: 15px; height: 15px;"></i>
               </button>
@@ -548,6 +554,13 @@ function renderAssets() {
     });
   });
 
+  container.querySelectorAll('.btn-duplicate-asset').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openAssetModal(null, btn.dataset.id);
+    });
+  });
+
   container.querySelectorAll('.btn-delete-asset').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -572,7 +585,7 @@ function getStatusClass(status) {
 }
 
 // Open Dynamic Asset Add / Edit Modal (Organized 23 Template Fields)
-function openAssetModal(assetIdToEdit = null) {
+function openAssetModal(assetIdToEdit = null, assetIdToDuplicate = null) {
   const activeCat = getActiveCategory();
   if (!activeCat) return;
 
@@ -590,18 +603,21 @@ function openAssetModal(assetIdToEdit = null) {
   catSelect.onchange = (e) => {
     state.activeCategoryId = e.target.value;
     renderActiveCategoryToolbar();
-    openAssetModal(assetIdToEdit);
+    openAssetModal(assetIdToEdit, assetIdToDuplicate);
   };
 
-  const asset = assetIdToEdit ? state.assets.find(a => a.id === assetIdToEdit || a.asset_number === assetIdToEdit) : null;
-  editingAssetSnapshot = asset ? JSON.stringify(asset) : null;
+  const sourceId = assetIdToEdit || assetIdToDuplicate;
+  const asset = sourceId ? state.assets.find(a => a.id === sourceId || a.asset_number === sourceId || a.asset_id === sourceId) : null;
+  editingAssetSnapshot = assetIdToEdit && asset ? JSON.stringify(asset) : null;
   assetPhotos = [asset?.photos?.[0] || '', asset?.photos?.[1] || ''];
 
-  modalTitle.textContent = asset 
+  modalTitle.textContent = assetIdToDuplicate && asset
+    ? `Duplicate Asset: ${asset.asset_number || asset.asset_name || asset.id}`
+    : asset
     ? `Edit Asset: ${asset.asset_number || asset.asset_name || asset.id}` 
     : `Add Asset to "${categoryLabel(activeCat)}"`;
   modalTabIndicator.textContent = categoryLabel(activeCat);
-  editIdInput.value = asset ? (asset.asset_number || asset.id) : '';
+  editIdInput.value = assetIdToEdit && asset ? (asset.asset_number || asset.id) : '';
 
   // Render Category Fields Grouped by Visual Sections
   dynamicContainer.innerHTML = '';
@@ -684,6 +700,10 @@ function openAssetModal(assetIdToEdit = null) {
       }
 
       let defaultValue = val;
+      if (assetIdToDuplicate && (field.id === 'asset_number' || field.id === 'asset_id')) {
+        const prefix = activeCat.name.substring(0, 2).toUpperCase();
+        defaultValue = `AST-${prefix}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      }
       if (!asset) {
         if (field.id === 'category') defaultValue = activeCat.name;
         if (field.id === 'status') defaultValue = 'Active / In Use';
